@@ -2,29 +2,62 @@ import { ethers } from "ethers";
 import dotenv from "dotenv";
 import fs from 'fs/promises';
 import process from 'process';
+import { readFileSync } from 'fs';
 
+const config = JSON.parse(readFileSync('./config.json', 'utf8'));
 // You can also use a lightweight CLI parser like `minimist` if needed
 const args = process.argv.slice(2);
+
+console.log(args);
 const listOnly = args.includes('-l') || args.includes('--list');
+
+const numaBorrower = args.includes('-n');
+
+console.log(numaBorrower);
+// extract chain name (first non-flag argument)
+const chainName = args.find(arg => !arg.startsWith('-'));
+
+if (!chainName) {
+  console.error("Usage: node bot.js <chainName> [options]");
+  process.exit(1);
+}
+
+const data = config[chainName];
+if (!data) {
+  console.error(`Unknown chain: ${chainName}`);
+  console.log("Available chains:", Object.keys(config).join(", "));
+  process.exit(1);
+}
+
+
+
 dotenv.config();
 
 // 📌 Configure wallet & provider
-const provider = new ethers.JsonRpcProvider(process.env.RPC_URL_SONIC);
-const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+// const provider = new ethers.JsonRpcProvider(process.env.RPC_URL_SONIC_SNIPE);
+// const wallet = new ethers.Wallet(process.env.PRIVATE_KEY_SNIPE, provider);
+
+const provider = new ethers.JsonRpcProvider(process.env[data.RPC_URL]);
+const wallet = new ethers.Wallet(process.env[data.PRIVATE_KEY], provider);
+
+
 
 
 // 📌 contracts SONIC
-const comptrollerAddress = "0x30047cca309b7aac3613ae5b990cf460253c9b98"; 
-const cNumaAddress = "0x16d4b53de6aba4b68480c7a3b6711df25fcb12d7"; 
-const cLstAddress = "0xb2a43445b97cd6a179033788d763b8d0c0487e36"; 
+const comptrollerAddress = data.comptroller; 
+let cNumaAddress = data.cNuma;
+let cLstAddress = data.cLst;
 
-const vaultAddress = "0xde76288c3b977776400fe44fe851bbe2313f1806";  
-const oracleAddress = "0xa92025d87128c1e2dcc0a08afbc945547ca3b084";
-const stsAddress = "0xe5da20f15420ad15de0fa650600afc998bbe3955";
+const vaultAddress = data.vault;
+const oracleAddress = data.oracle;
+const stsAddress = data.lst;
 const collateralFactor = 950000000000000000;
 
-
-
+if (numaBorrower)
+{
+    cNumaAddress = data.cLst;
+    cLstAddress = data.cNuma;
+}
 
 
 const comptrollerAbi = [
@@ -56,8 +89,10 @@ const compoundOracleAbi = [
 
 
 const comptroller = new ethers.Contract(comptrollerAddress, comptrollerAbi, provider);
-const cNuma = new ethers.Contract(cNumaAddress, cTokenAbi, wallet);
-const crEth = new ethers.Contract(cLstAddress, cTokenAbi, wallet);
+let cNuma = new ethers.Contract(cNumaAddress, cTokenAbi, wallet);
+let crEth = new ethers.Contract(cLstAddress, cTokenAbi, wallet);
+
+
 const vault = new ethers.Contract(vaultAddress, vaultAbi, wallet);
 const oracle = new ethers.Contract(oracleAddress, compoundOracleAbi, wallet);
 const sts = new ethers.Contract(stsAddress, cTokenAbi, wallet);
@@ -125,7 +160,7 @@ async function getBorrowerData(address) {
             // partial liquidation ltv > 110
             LiquidationType = 3;// find optimal % of borrow amount
             // 50%
-            LiquidationAmount = 0.5*LiquidationAmount;
+            LiquidationAmount = LiquidationAmount/BigInt(2);
         }
         else if (badDebt > 0) // 100 -> 110
         {
@@ -164,14 +199,31 @@ async function getBorrowerData(address) {
 
     };
   } catch (err) {
-    console.error(`Failed to fetch data for ${address}:`, err.message);
-    return null;
+      console.error(`Failed to fetch data for ${address}:`, err.message);
+
+      if (err.message.includes("Too Many Requests")) {
+          console.warn("Rate limited, retrying...");
+          await new Promise(r => setTimeout(r, 3000)); // exponential backoff
+          // try again
+          return getBorrowerData(address);
+      }
+      else {
+          return null;
+      }
+
+    
   }
 }
 
 
 
-
+function decimalToBigInt(num, decimals) {
+  if (typeof num !== "number" || isNaN(num)) {
+    throw new TypeError("Expected a valid number");
+  }
+  const scale = 10 ** decimals; // e.g. 2 decimals → multiply by 100
+  return BigInt(Math.round(num * scale));
+}
 
 async function main() {
     console.log("🚀 Liquidation bot started...");
@@ -187,8 +239,16 @@ async function main() {
             const data = await getBorrowerData(addr);
             if (data) allData.push(data);
         }
-        console.log(allData);    
-        await fs.writeFile('borrowersData.json', JSON.stringify(allData, null, 2));
+        console.log(allData);   
+        let filename = `borrowersData_${chainName}.json`; 
+
+        if (numaBorrower)
+        {
+            filename = `borrowersData_NumaBorrow_${chainName}.json`;
+        }
+
+
+        await fs.writeFile(filename, JSON.stringify(allData, null, 2));
         console.log(`Saved ${allData.length} borrower entries to borrowersData.json`);
         
         
@@ -208,35 +268,36 @@ async function main() {
                 {
                     // we don't need to provide liquidity
                     if (data.liquidationType == 1)
-                    {                       
+                    {     
+                        console.log(data.liquidationAmount)  ;                
                         await vault.liquidateLstBorrower(addr,
-                            data.liquidationAmount,
+                            decimalToBigInt(data.liquidationAmount,18),
                             true,
                             true
                         )
                     }
-                    else if (data.liquidationType == 2)
-                    {
-                        await vault.liquidateLstBorrower(addr,
-                            data.liquidationAmount,
-                            true,
-                            true
-                        )
-                    }
-                    else if (data.liquidationType == 3)
-                    {                        
-                        await vault.liquidateLstBorrower(addr,
-                            data.liquidationAmount,
-                            true,
-                            true
-                        )
-                    }
-                    else if (data.liquidationType == 4)
-                    {
-                        // TODO
-                        // BAD DEBT liquidation
+                    // else if (data.liquidationType == 2)
+                    // {
+                    //     await vault.liquidateLstBorrower(addr,
+                    //         data.liquidationAmount,
+                    //         true,
+                    //         true
+                    //     )
+                    // }
+                    // else if (data.liquidationType == 3)
+                    // {                        
+                    //     await vault.liquidateLstBorrower(addr,
+                    //         data.liquidationAmount,
+                    //         true,
+                    //         true
+                    //     )
+                    // }
+                    // else if (data.liquidationType == 4)
+                    // {
+                    //     // TODO
+                    //     // BAD DEBT liquidation
 
-                    }
+                    // }
                 }
                 else
                 {
