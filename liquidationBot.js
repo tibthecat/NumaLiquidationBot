@@ -8,12 +8,12 @@ const config = JSON.parse(readFileSync('./config.json', 'utf8'));
 // You can also use a lightweight CLI parser like `minimist` if needed
 const args = process.argv.slice(2);
 
-console.log(args);
+
 const listOnly = args.includes('-l') || args.includes('--list');
 
 const numaBorrower = args.includes('-n');
 
-console.log(numaBorrower);
+
 // extract chain name (first non-flag argument)
 const chainName = args.find(arg => !arg.startsWith('-'));
 
@@ -177,6 +177,8 @@ async function getBorrowerData(address) {
     }
     let LiquidityInVault = true;
     let VaultBalance = await sts.balanceOf(vaultAddress);
+
+
     if (VaultBalance < LiquidationAmount)
     {
         LiquidityInVault = false;
@@ -269,6 +271,7 @@ async function main() {
                     // we don't need to provide liquidity
                     if (data.liquidationType == 1)
                     {     
+                        console.log("💀 Liquidating borrower (std):", addr);
                         console.log(data.liquidationAmount)  ;                
                         await vault.liquidateLstBorrower(addr,
                             decimalToBigInt(data.liquidationAmount,18),

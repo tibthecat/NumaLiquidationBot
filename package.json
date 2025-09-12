@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "fork": "node scripts/fork.js",
+    "setup": "dotenv -e .env -- forge script script/SetupAccount.s.sol:SetupAccount --rpc-url fork --broadcast --unlocked",
+    "bot": "node liquidationBot.js test",
+    "check": "forge test --rpc-url fork -vv"
   },
   "keywords": [],
   "author": "",
@@ -13,5 +16,8 @@
   "dependencies": {
     "dotenv": "^16.4.7",
     "ethers": "^6.13.5"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^10.0.0"
   }
 }
