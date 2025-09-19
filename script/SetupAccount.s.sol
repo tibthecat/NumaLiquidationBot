@@ -11,7 +11,7 @@ import {IERC20, IComptroller, ICNumaToken, IVault} from "../include/Interfaces.s
 contract SetupAccount is Script {
 
     address user = makeAddr(Config.user);
-
+    
     ICNumaToken public cNuma;
     ICNumaToken public cLst;
     IERC20 public numa; 
@@ -33,7 +33,7 @@ contract SetupAccount is Script {
 
         // give user some NUMA and chain token
         vm.startBroadcast(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);// anvil account
-        payable(user).transfer(10 ether);
+        payable(user).transfer(10 ether);      
         // transfer to bot too
         payable(Config.bot_address).transfer(10 ether);
         vm.stopBroadcast();
@@ -43,6 +43,12 @@ contract SetupAccount is Script {
         numa.transfer(user,Config.initialNumaAmount);          
         vm.stopBroadcast();
 
+        // transfer some stS to the bot to test liquidation with amount
+        vm.startBroadcast(0xdcF937FeB1761dF3CA3f1Ce861C14d5E0ACB148e); // some stS whale
+        lst.transfer(Config.bot_address,5100 ether);          
+        vm.stopBroadcast();
+
+   
         // unpause lending
         vm.startBroadcast(comptroller.admin()); 
         comptroller._setMintPaused(Config.cNuma_address,false);
@@ -53,11 +59,11 @@ contract SetupAccount is Script {
 
         vm.stopBroadcast();
 
-
+        // USER1
         // deposit and borrow
         vm.startBroadcast(user);
 
-        // enter market
+        // // enter market
         address[] memory t = new address[](2);
         t[0] = address(cNuma);
         t[1] = address(cLst);
@@ -74,21 +80,22 @@ contract SetupAccount is Script {
         console.log("borrowed ",Config.borrowAmount/1e18," RETH");
         vm.stopBroadcast();
 
-        // make it liquiditable
-        vm.startBroadcast(vault.owner()); 
 
-        uint vaultBalance = lst.balanceOf(Config.vault_address);
-        uint withdrawAmount = vaultBalance/3;
-        console.log("vault lst balance ",vaultBalance);
-        console.log("withdraw ",withdrawAmount);
-        console.log("expected balance",vaultBalance - withdrawAmount);
-        // withdraw some lst from vault
-        vault.withdrawToken(Config.lst_address ,withdrawAmount,vault.owner());
+        // // make it liquiditable
+        // vm.startBroadcast(vault.owner()); 
 
-        // add test bot as allowed to liquidate
-        vault.updateWhitelist(Config.bot_address,true);
+        // uint vaultBalance = lst.balanceOf(Config.vault_address);
+        // uint withdrawAmount = vaultBalance/3;
+        // console.log("vault lst balance ",vaultBalance);
+        // console.log("withdraw ",withdrawAmount);
+        // console.log("expected balance",vaultBalance - withdrawAmount);
+        // // withdraw some lst from vault
+        // vault.withdrawToken(Config.lst_address ,withdrawAmount,vault.owner());
 
-        vm.stopBroadcast();
+        // // add test bot as allowed to liquidate
+        // vault.updateWhitelist(Config.bot_address,true);
+
+        //vm.stopBroadcast();
         // TODO display account snapshot
 
     }

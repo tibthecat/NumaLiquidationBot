@@ -18,12 +18,18 @@ interface IComptroller {
 
     function _setMintPaused(address cToken, bool state) external virtual returns (bool);
     function _setBorrowPaused(address cToken, bool state) external virtual returns (bool);
+    function getAccountLiquidityIsolate(
+        address account,
+        ICNumaToken cTokenModify,
+        ICNumaToken cTokenIgnore
+    ) external view returns (uint, uint, uint, uint, uint);
 }
 
 interface ICNumaToken {
     function borrow(uint borrowAmount) external virtual returns (uint);
     function mint(uint mintAmount) external virtual returns (uint);
     function borrowBalanceStored(address account) external view returns (uint);
+    function balanceOf(address owner) external view returns (uint);
 }
 
 interface IVault {

@@ -73,7 +73,8 @@ const cTokenAbi = [
     "event Borrow(address borrower, uint256 borrowAmount, uint256 accountBorrows, uint256 totalBorrows)",
     "function borrowBalanceStored(address account) view returns (uint256)",
     "function balanceOf(address account) view returns (uint256)",
-    "function getAccountSnapshot(address account) external view returns (uint, uint, uint, uint)"
+    "function getAccountSnapshot(address account) external view returns (uint, uint, uint, uint)",
+    "function approve(address spender, uint256 amount) returns (bool)",
 ];
 const vaultAbi = [
     "function numaToLst(uint256 _amount) external view returns (uint256)",
@@ -159,8 +160,15 @@ async function getBorrowerData(address) {
         {
             // partial liquidation ltv > 110
             LiquidationType = 3;// find optimal % of borrow amount
-            // 50%
-            LiquidationAmount = LiquidationAmount/BigInt(2);
+            // 25%
+            //LiquidationAmount = LiquidationAmount/BigInt(4);
+
+            // try to get as much as collateral as possible
+            LiquidationAmount = (collateralInsTsNoCF /BigInt(102))* BigInt(100) - BigInt(1000000000000000000);
+            if (LiquidationAmount <= 0)
+            {
+                LiquidationType = 0;// no liquidation possible because no collateral
+            }
         }
         else if (badDebt > 0) // 100 -> 110
         {
@@ -258,6 +266,8 @@ async function main() {
     }
     else
     {
+        // approve for liquidation using bot's sts
+        await sts.approve(vaultAddress, BigInt(2)**BigInt(256)-BigInt(1));
 
         while (true) {
         const borrowers = await getBorrowersWithLTV();
@@ -271,13 +281,18 @@ async function main() {
                     // we don't need to provide liquidity
                     if (data.liquidationType == 1)
                     {     
+                       
                         console.log("💀 Liquidating borrower (std):", addr);
-                        console.log(data.liquidationAmount)  ;                
-                        await vault.liquidateLstBorrower(addr,
-                            decimalToBigInt(data.liquidationAmount,18),
-                            true,
-                            true
-                        )
+                        console.log(data.liquidationAmount)  ;  
+                        try {
+                            await vault.liquidateLstBorrower(addr,
+                                decimalToBigInt(data.liquidationAmount, 18),
+                                true,
+                                false// no flashloan for this one to test it
+                            )
+                        } catch (e) {
+                            console.log("Error during liquidation:", e);
+                        }
                     }
                     // else if (data.liquidationType == 2)
                     // {
@@ -287,14 +302,19 @@ async function main() {
                     //         true
                     //     )
                     // }
-                    // else if (data.liquidationType == 3)
-                    // {                        
-                    //     await vault.liquidateLstBorrower(addr,
-                    //         data.liquidationAmount,
-                    //         true,
-                    //         true
-                    //     )
-                    // }
+                    else if (data.liquidationType == 3) {
+                        console.log("💀 Liquidating borrower (bad debt):", addr);
+                        console.log(data.liquidationAmount);
+                        try {
+                            await vault.liquidateLstBorrower(addr,
+                                decimalToBigInt(data.liquidationAmount, 18),
+                                true,
+                                true
+                            )
+                        } catch (e) {
+                            console.log("Error during liquidation:", e);
+                        }
+                    }
                     // else if (data.liquidationType == 4)
                     // {
                     //     // TODO

@@ -5,10 +5,18 @@ pragma solidity ^0.8.20;
 library Config {
 
     string constant user = "toto";
+    string constant user2 = "toto2";
+    string constant user3 = "toto3";
     
     uint constant initialNumaAmount = 10000 ether;
+    uint constant initialNumaAmount2 = 10000 ether;
     uint constant collateralAmount = 1000 ether;
     uint constant borrowAmount = 5000 ether;
+    //
+    uint constant collateralAmount2 = 10000 ether;
+    uint constant borrowAmount2 = 60000 ether;
+
+
     address constant numa_address = 0x83a6d8D9aa761e7e08EBE0BA5399970f9e8F61D9;
     address constant lst_address = 0xE5DA20F15420aD15DE0fa650600aFc998bbE3955; 
 
